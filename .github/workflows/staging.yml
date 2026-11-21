@@ -1,13 +1,9 @@
-name: Staging build
+name: 🛠️ Staging 构建 (Staging Build)
 
 on:
   push:
     branches:
-      - dev
-    paths-ignore:
-      - '**.md'
-      - '.github/**'
-      - '!.github/workflows/staging.yml'
+      - '**'
   workflow_dispatch:
     inputs:
       upload:
@@ -21,7 +17,7 @@ permissions:
 
 jobs:
   build:
-    name: Gradle Build
+    name: 🔨 构建 Staging APK (Build Staging APK)
     runs-on: ubuntu-24.04
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -29,43 +25,43 @@ jobs:
       CCACHE_NOHASHDIR: "true"
       CCACHE_MAXSIZE: "10G"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: 检出代码 (Checkout)
+        uses: actions/checkout@v7
         with:
           submodules: recursive
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - name: 安装 Java (Install Java)
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
-      - name: Set up Ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: 配置 Ccache (Setup Ccache)
+        uses: hendrikmuhs/ccache-action@v1
         with:
           append-timestamp: false
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: 配置 Gradle (Setup Gradle)
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-disabled: true
-      - name: Set up Gradle cache
-        uses: actions/cache@v4
+      - name: 配置 Gradle 缓存 (Setup Gradle Cache)
+        uses: actions/cache@v6
         with:
           path: ~/.gradle
           key: gradle-${{ hashFiles('**/*.gradle') }}
-      - name: Set up Android SDK Tools
-        uses: android-actions/setup-android@v3
+      - name: 安装 Android SDK 工具 (Install Android SDK Tools)
+        uses: android-actions/setup-android@v4
         with:
           # ndk must match ndkVersion in the root build.gradle
           packages: "build-tools;36.0.0 ndk;27.2.12479018 platforms;android-36"
-      - name: Set up Python (Chaquopy bridge source build)
-        uses: actions/setup-python@v5
+      - name: 安装 Python (Install Python)
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11.9'
-      - name: Install Cython (Chaquopy bridge source build)
+      - name: 安装 Cython (Install Cython)
         run: pip install Cython==3.0.11
-      - name: Configure Android SDK Path
+      - name: 配置 Android SDK 路径 (Configure Android SDK Path)
         run: |
           echo "sdk.dir=${ANDROID_HOME}" >> local.properties
-      - name: Modify Gradle JVM Args
+      - name: 配置 Gradle JVM 参数 (Configure Gradle JVM Arguments)
         run: |
           MEMORY_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
           MEMORY_GB=$((MEMORY_KB / 1024 / 1024))
@@ -75,19 +71,26 @@ jobs:
             echo "org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=2G -XX:+UseParallelGC -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8" >> gradle.properties
           fi
           cat gradle.properties
-      - name: Staging Build
+      - name: 签名并构建 APK (Sign and Build APK)
         env:
           COMMIT_ID: ${{ github.event.head_commit.id }}
+          LOCAL_PROPERTIES: ${{ secrets.LOCAL_PROPERTIES }}
         run: |
-          export LOCAL_PROPERTIES="${{ secrets.LOCAL_PROPERTIES }}"
+          LOCAL_PROPERTIES="$(java .github/scripts/PrepareApkSigning.java)"
+          if [ -n "$LOCAL_PROPERTIES" ]; then
+            echo "::add-mask::$LOCAL_PROPERTIES"
+          fi
+          export LOCAL_PROPERTIES
           export BUILD_TIMESTAMP=$(date +%s)
           ./gradlew TMessagesProj:assembleStaging
-      - uses: actions/upload-artifact@v4
+      - name: 上传 普通版 APK (Upload Normal APK)
+        uses: actions/upload-artifact@v7
         with:
           name: normal-staging
           path: TMessagesProj/build/outputs/apk/normal/staging/
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - name: 上传 插件版 APK (Upload Plugin APK)
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-staging
           path: TMessagesProj/build/outputs/apk/plugin/staging/
